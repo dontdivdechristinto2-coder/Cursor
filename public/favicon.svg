@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="CopticCloud">
+  <defs>
+    <linearGradient id="sky" x1="18" x2="110" y1="26" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4fb7f3" />
+      <stop offset="1" stop-color="#071b36" />
+    </linearGradient>
+    <linearGradient id="gold" x1="44" x2="84" y1="30" y2="102" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f7d777" />
+      <stop offset="1" stop-color="#c9992d" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#sky)" />
+  <path
+    d="M32 80c-9 0-16-7-16-15s7-15 16-15h4c4-12 15-20 28-20 15 0 27 10 30 24h2c9 0 16 7 16 15s-7 15-16 15H32Z"
+    fill="#ffffff"
+    opacity=".96"
+  />
+  <path d="M64 40v42M48 56h32" stroke="url(#gold)" stroke-width="9" stroke-linecap="round" />
+</svg>

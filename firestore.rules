@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin";
+    }
+
+    match /users/{userId} {
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == "User"
+        && request.resource.data.email == request.auth.token.email;
+
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+
+      allow update: if isAdmin()
+        || (
+          isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "displayName",
+            "photoURL",
+            "updatedAt"
+          ])
+        );
+
+      allow delete: if false;
+    }
+
+    match /contentItems/{contentId} {
+      allow read: if isSignedIn() && (resource.data.publishedStatus == "Published" || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /tags/{tagId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /metadata/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

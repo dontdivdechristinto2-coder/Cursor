@@ -1,0 +1,19 @@
+{
+  "name": "CopticCloud",
+  "short_name": "CopticCloud",
+  "description": "A Coptic Orthodox liturgical library and educational platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071b36",
+  "theme_color": "#071b36",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "books", "reference"]
+}

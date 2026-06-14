@@ -43,7 +43,7 @@ const ATTACHMENT_TYPES: Array<{ type: AttachmentType; label: string; accept: str
 ];
 
 export function AdminDashboardPage() {
-  const { firebaseUser } = useAuth();
+  const { profile } = useAuth();
   const [items, setItems] = useState<ContentItem[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
@@ -80,7 +80,7 @@ export function AdminDashboardPage() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!firebaseUser) {
+    if (!profile) {
       return;
     }
 
@@ -97,10 +97,10 @@ export function AdminDashboardPage() {
 
     try {
       if (selectedItem) {
-        await updateContentItem(selectedItem.id, preparedValues, firebaseUser.uid);
+        await updateContentItem(selectedItem.id, preparedValues, profile.uid);
         setMessage("Content updated.");
       } else {
-        const id = await createContentItem(preparedValues, firebaseUser.uid);
+        const id = await createContentItem(preparedValues, profile.uid);
         setMessage("Content created as draft.");
         const created = await listAllContent();
         setItems(created);
@@ -120,12 +120,12 @@ export function AdminDashboardPage() {
   };
 
   const handlePublishToggle = async (item: ContentItem) => {
-    if (!firebaseUser) {
+    if (!profile) {
       return;
     }
 
     const nextStatus = item.publishedStatus === "Published" ? "Draft" : "Published";
-    await updateContentStatus(item.id, nextStatus, firebaseUser.uid);
+    await updateContentStatus(item.id, nextStatus, profile.uid);
     await refreshAdminData();
     setMessage(`Content marked ${nextStatus}.`);
   };
@@ -146,7 +146,7 @@ export function AdminDashboardPage() {
 
   const handleUpload = async (type: AttachmentType, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !selectedItem || !firebaseUser) {
+    if (!file || !selectedItem || !profile) {
       return;
     }
 
@@ -156,7 +156,7 @@ export function AdminDashboardPage() {
       file,
       type,
       existing,
-      userId: firebaseUser.uid
+      userId: profile.uid
     });
     const content = await listAllContent();
     setItems(content);

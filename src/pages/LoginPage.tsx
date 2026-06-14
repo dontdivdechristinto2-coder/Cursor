@@ -1,18 +1,19 @@
 import { LogIn } from "lucide-react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { CloudLogo } from "../components/CloudLogo";
 import { useAuth } from "../state/AuthContext";
 
 export function LoginPage() {
-  const { firebaseUser, isConfigured, loading, onboardingRequired, signInWithGoogle } = useAuth();
+  const { isAuthenticated, isConfigured, loading, onboardingRequired, signInWithGoogle, startLocalOnboarding } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const from = location.state && typeof location.state === "object" && "from" in location.state ? "/" : "/";
 
-  if (!loading && firebaseUser && onboardingRequired) {
+  if (!loading && onboardingRequired) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (!loading && firebaseUser && !onboardingRequired) {
+  if (!loading && isAuthenticated && !onboardingRequired) {
     return <Navigate to={from} replace />;
   }
 
@@ -27,16 +28,28 @@ export function LoginPage() {
         </p>
         {!isConfigured ? (
           <div className="config-warning">
-            <strong>Firebase configuration required</strong>
+            <strong>No Google setup required</strong>
             <span>
-              Set VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
-              VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, and VITE_FIREBASE_APP_ID.
+              CopticCloud will run locally in this browser. You can set up Firebase later if you want cloud sync.
             </span>
           </div>
         ) : null}
-        <button className="primary-button auth-button" disabled={!isConfigured || loading} type="button" onClick={signInWithGoogle}>
+        <button
+          className="primary-button auth-button"
+          disabled={loading}
+          type="button"
+          onClick={() => {
+            if (isConfigured) {
+              void signInWithGoogle();
+              return;
+            }
+
+            startLocalOnboarding();
+            navigate("/onboarding");
+          }}
+        >
           <LogIn aria-hidden="true" />
-          Continue with Google
+          {isConfigured ? "Continue with Google" : "Continue without Google"}
         </button>
       </section>
     </main>

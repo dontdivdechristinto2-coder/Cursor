@@ -17,6 +17,7 @@ export default tseslint.config(
         navigator: "readonly",
         console: "readonly",
         File: "readonly",
+        FileReader: "readonly",
         URL: "readonly",
         Request: "readonly",
         Response: "readonly",

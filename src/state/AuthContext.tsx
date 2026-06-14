@@ -14,22 +14,33 @@ const firebaseEnvConfigured = [
 type AuthContextValue = {
   firebaseUser: User | null;
   profile: UserProfile | null;
+  authMode: "firebase" | "local";
+  isAuthenticated: boolean;
   loading: boolean;
   isConfigured: boolean;
   onboardingRequired: boolean;
+  startLocalOnboarding: () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const LOCAL_PROFILE_KEY = "copticcloud-local-profile";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(() => readLocalProfile());
+  const [localOnboarding, setLocalOnboarding] = useState(false);
   const [loading, setLoading] = useState(firebaseEnvConfigured);
 
   const refreshProfile = useCallback(async () => {
+    if (!firebaseEnvConfigured) {
+      setProfile(readLocalProfile());
+      setLocalOnboarding(false);
+      return;
+    }
+
     if (!firebaseUser) {
       setProfile(null);
       return;
@@ -41,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!firebaseEnvConfigured) {
+      setProfile(readLocalProfile());
       setLoading(false);
       return;
     }
@@ -80,9 +92,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       firebaseUser,
       profile,
+      authMode: firebaseEnvConfigured ? "firebase" : "local",
+      isAuthenticated: Boolean(firebaseUser || profile),
       loading,
       isConfigured: firebaseEnvConfigured,
-      onboardingRequired: Boolean(firebaseUser && !profile && !loading),
+      onboardingRequired: firebaseEnvConfigured
+        ? Boolean(firebaseUser && !profile && !loading)
+        : Boolean(localOnboarding && !profile && !loading),
+      startLocalOnboarding: () => {
+        setLocalOnboarding(true);
+      },
       signInWithGoogle: async () => {
         if (!firebaseEnvConfigured) {
           throw new Error("Firebase environment variables are required before Google Sign-In can run.");
@@ -102,14 +121,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             import("firebase/auth")
           ]);
           await firebaseSignOut(requireFirebaseServices().auth);
+        } else {
+          localStorage.removeItem(LOCAL_PROFILE_KEY);
+          setProfile(null);
+          setLocalOnboarding(false);
         }
       },
       refreshProfile
     }),
-    [firebaseUser, loading, profile, refreshProfile]
+    [firebaseUser, loading, localOnboarding, profile, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function readLocalProfile(): UserProfile | null {
+  if (firebaseEnvConfigured || typeof localStorage === "undefined") {
+    return null;
+  }
+
+  const stored = localStorage.getItem(LOCAL_PROFILE_KEY);
+
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored) as UserProfile;
+  } catch {
+    localStorage.removeItem(LOCAL_PROFILE_KEY);
+    return null;
+  }
 }
 
 export function useAuth(): AuthContextValue {

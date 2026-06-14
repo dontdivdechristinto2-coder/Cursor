@@ -5,7 +5,7 @@ import { useAppearance } from "../state/AppearanceContext";
 import { useAuth } from "../state/AuthContext";
 
 export function SettingsPage() {
-  const { firebaseUser, profile, refreshProfile, signOut } = useAuth();
+  const { profile, refreshProfile, signOut } = useAuth();
   const { mode, setMode } = useAppearance();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
@@ -25,7 +25,7 @@ export function SettingsPage() {
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!firebaseUser) {
+    if (!profile) {
       return;
     }
 
@@ -33,8 +33,8 @@ export function SettingsPage() {
     setMessage("");
 
     try {
-      const finalPhotoURL = file ? await uploadProfilePicture(firebaseUser.uid, file) : photoURL;
-      await updateOwnProfile(firebaseUser.uid, {
+      const finalPhotoURL = file ? await uploadProfilePicture(profile.uid, file) : photoURL;
+      await updateOwnProfile(profile.uid, {
         displayName: displayName.trim(),
         photoURL: finalPhotoURL
       });

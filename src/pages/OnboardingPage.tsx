@@ -5,8 +5,9 @@ import { completeUserOnboarding, uploadProfilePicture } from "../services/userRe
 import { useAuth } from "../state/AuthContext";
 
 export function OnboardingPage() {
-  const { firebaseUser, loading, onboardingRequired, profile, refreshProfile } = useAuth();
+  const { authMode, firebaseUser, loading, onboardingRequired, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const activeUid = firebaseUser?.uid ?? "local-user";
   const [step, setStep] = useState(1);
   const [displayName, setDisplayName] = useState(firebaseUser?.displayName ?? "");
   const [photoURL, setPhotoURL] = useState(firebaseUser?.photoURL ?? "");
@@ -19,12 +20,16 @@ export function OnboardingPage() {
     return <main className="center-screen">Preparing your profile...</main>;
   }
 
-  if (!firebaseUser) {
+  if (authMode === "firebase" && !firebaseUser) {
     return <Navigate to="/login" replace />;
   }
 
   if (!onboardingRequired && profile) {
     return <Navigate to="/" replace />;
+  }
+
+  if (authMode === "local" && !onboardingRequired && !profile) {
+    return <Navigate to="/login" replace />;
   }
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -53,18 +58,13 @@ export function OnboardingPage() {
     event.preventDefault();
     setError("");
 
-    if (!photoURL && !selectedFile) {
-      setError("Choose your Google profile image or upload a profile picture.");
-      return;
-    }
-
     setSaving(true);
 
     try {
-      const finalPhotoURL = selectedFile ? await uploadProfilePicture(firebaseUser.uid, selectedFile) : photoURL;
+      const finalPhotoURL = selectedFile ? await uploadProfilePicture(activeUid, selectedFile) : photoURL;
       await completeUserOnboarding({
-        uid: firebaseUser.uid,
-        email: firebaseUser.email ?? "",
+        uid: activeUid,
+        email: firebaseUser?.email ?? "local@copticcloud.app",
         displayName: displayName.trim(),
         photoURL: finalPhotoURL
       });
@@ -103,21 +103,21 @@ export function OnboardingPage() {
             <div className="avatar-preview">
               {previewURL ? <img alt="Selected profile" src={previewURL} /> : <span>{displayName.slice(0, 1).toUpperCase()}</span>}
             </div>
-            {firebaseUser.photoURL ? (
+            {firebaseUser?.photoURL ? (
               <button
                 className="secondary-button"
                 type="button"
                 onClick={() => {
-                  setPhotoURL(firebaseUser.photoURL ?? "");
+                  setPhotoURL(firebaseUser?.photoURL ?? "");
                   setSelectedFile(null);
-                  setPreviewURL(firebaseUser.photoURL ?? "");
+                  setPreviewURL(firebaseUser?.photoURL ?? "");
                 }}
               >
                 Use Google profile picture
               </button>
             ) : null}
             <label>
-              Upload Profile Picture
+              Upload Profile Picture <span className="muted">(optional)</span>
               <input accept="image/*" type="file" onChange={handleFileChange} />
             </label>
             {error ? <p className="form-error">{error}</p> : null}

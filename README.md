@@ -4,10 +4,10 @@ CopticCloud is a production-oriented, mobile-first Coptic Orthodox liturgical li
 
 ## What is included
 
-- Google Sign-In with first-login onboarding for display name and profile picture.
+- No-Google local profile setup for immediate use, with optional Firebase/Google cloud mode available later.
 - User roles: `User` and `Admin`.
 - Secure Admin portal for content CRUD, publishing, media uploads, tags, category assignment, service order, and user role management.
-- Empty Firestore-backed content architecture. No hymns, readings, responses, demo records, or generated sample content are seeded.
+- Empty content architecture with browser-local storage by default and Firestore-backed cloud storage when Firebase is configured. No hymns, readings, responses, demo records, or generated sample content are seeded.
 - Four primary categories only:
   - Matins & Divine Liturgy
   - Readings
@@ -17,9 +17,20 @@ CopticCloud is a production-oriented, mobile-first Coptic Orthodox liturgical li
 - Mobile-first PWA shell with light/dark mode, service worker, and manifest.
 - Future-ready content schema for educational and AI-assisted features without enabling AI tools yet.
 
-## Firebase setup
+## Local use
 
-Create a Firebase project with Authentication, Firestore, Storage, and Hosting enabled. Enable Google as an Authentication provider.
+Firebase is optional. If no Firebase environment variables are set, CopticCloud runs locally in the browser:
+
+- Click **Continue without Google**.
+- Choose a display name.
+- Optionally upload a profile picture.
+- The local profile is created as `Admin` so the Admin portal can be used immediately.
+
+Local content is stored in browser storage. This is convenient for preview and simple use on one device, but Firebase or another backend should be configured for synced multi-device production use.
+
+## Optional Firebase setup
+
+Create a Firebase project with Authentication, Firestore, Storage, and Hosting enabled. Enable Google as an Authentication provider if you want cloud authentication.
 
 Create a local `.env` file with:
 
@@ -32,7 +43,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
 
-Deploy the included `firestore.rules` and `storage.rules` before production use.
+Deploy the included `firestore.rules` and `storage.rules` before Firebase production use.
 
 New profiles are created with the `User` role. Bootstrap the first administrator by updating that user's `users/{uid}.role` field to `Admin` directly in the Firebase console or through a trusted server-side administrative script.
 

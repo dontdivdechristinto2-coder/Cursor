@@ -24,9 +24,10 @@ import {
   PublishedStatus,
   tokenizeContent
 } from "../domain/content";
-import { requireFirebaseServices } from "./firebase";
+import { isFirebaseConfigured, requireFirebaseServices } from "./firebase";
 
 const CONTENT_COLLECTION = "contentItems";
+const LOCAL_CONTENT_KEY = "copticcloud-local-content";
 
 export type ContentSearchFilters = {
   queryText: string;
@@ -36,6 +37,13 @@ export type ContentSearchFilters = {
 };
 
 export async function listPublishedContent(category?: CategoryId): Promise<ContentItem[]> {
+  if (!isFirebaseConfigured) {
+    return readLocalContent()
+      .filter((item) => item.publishedStatus === "Published")
+      .filter((item) => !category || item.category === category)
+      .sort(sortByServiceOrder);
+  }
+
   const { db } = requireFirebaseServices();
   const constraints: QueryConstraint[] = [where("publishedStatus", "==", "Published"), orderBy("serviceOrder"), orderBy("title")];
 
@@ -48,12 +56,26 @@ export async function listPublishedContent(category?: CategoryId): Promise<Conte
 }
 
 export async function listAllContent(): Promise<ContentItem[]> {
+  if (!isFirebaseConfigured) {
+    return readLocalContent().sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
+  }
+
   const { db } = requireFirebaseServices();
   const snapshot = await getDocs(query(collection(db, CONTENT_COLLECTION), orderBy("updatedAt", "desc"), limit(200)));
   return snapshot.docs.map((document) => fromContentDocument(document.id, document.data()));
 }
 
 export async function getContentItem(id: string, includeDraft = false): Promise<ContentItem | null> {
+  if (!isFirebaseConfigured) {
+    const item = readLocalContent().find((contentItem) => contentItem.id === id) ?? null;
+
+    if (!item || (!includeDraft && item.publishedStatus !== "Published")) {
+      return null;
+    }
+
+    return item;
+  }
+
   const { db } = requireFirebaseServices();
   const snapshot = await getDoc(doc(db, CONTENT_COLLECTION, id));
 
@@ -70,6 +92,22 @@ export async function getContentItem(id: string, includeDraft = false): Promise<
 }
 
 export async function searchContent(filters: ContentSearchFilters): Promise<ContentItem[]> {
+  if (!isFirebaseConfigured) {
+    const normalizedTokens = tokenizeContent({
+      title: filters.queryText,
+      tags: filters.tags
+    });
+
+    return readLocalContent()
+      .filter((item) => item.publishedStatus === "Published")
+      .filter((item) => !filters.category || filters.category === "all" || item.category === filters.category)
+      .filter((item) => matchesLanguageFilter(item, filters.language))
+      .filter((item) => filters.tags.every((tag) => item.tags.includes(tag)))
+      .filter((item) => normalizedTokens.length === 0 || normalizedTokens.some((token) => item.searchTokens.includes(token)))
+      .sort(sortByServiceOrder)
+      .slice(0, 75);
+  }
+
   const { db } = requireFirebaseServices();
   const normalizedTokens = tokenizeContent({
     title: filters.queryText,
@@ -96,6 +134,26 @@ export async function searchContent(filters: ContentSearchFilters): Promise<Cont
 }
 
 export async function createContentItem(values: ContentFormValues, userId: string): Promise<string> {
+  if (!isFirebaseConfigured) {
+    const now = new Date();
+    const id = crypto.randomUUID();
+    const item: ContentItem = {
+      ...values,
+      id,
+      audioFiles: [],
+      pdfFiles: [],
+      images: [],
+      sheetMusic: [],
+      searchTokens: tokenizeContent(values),
+      createdBy: userId,
+      updatedBy: userId,
+      createdAt: now,
+      updatedAt: now
+    };
+    writeLocalContent([...readLocalContent(), item]);
+    return id;
+  }
+
   const { db } = requireFirebaseServices();
   const searchTokens = tokenizeContent(values);
   const document = await addDoc(collection(db, CONTENT_COLLECTION), {
@@ -115,6 +173,24 @@ export async function createContentItem(values: ContentFormValues, userId: strin
 }
 
 export async function updateContentItem(id: string, values: ContentFormValues, userId: string): Promise<void> {
+  if (!isFirebaseConfigured) {
+    const content = readLocalContent();
+    writeLocalContent(
+      content.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              ...values,
+              searchTokens: tokenizeContent(values),
+              updatedBy: userId,
+              updatedAt: new Date()
+            }
+          : item
+      )
+    );
+    return;
+  }
+
   const { db } = requireFirebaseServices();
 
   await updateDoc(doc(db, CONTENT_COLLECTION, id), {
@@ -126,6 +202,22 @@ export async function updateContentItem(id: string, values: ContentFormValues, u
 }
 
 export async function updateContentStatus(id: string, publishedStatus: PublishedStatus, userId: string): Promise<void> {
+  if (!isFirebaseConfigured) {
+    writeLocalContent(
+      readLocalContent().map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              publishedStatus,
+              updatedBy: userId,
+              updatedAt: new Date()
+            }
+          : item
+      )
+    );
+    return;
+  }
+
   const { db } = requireFirebaseServices();
 
   await updateDoc(doc(db, CONTENT_COLLECTION, id), {
@@ -136,6 +228,11 @@ export async function updateContentStatus(id: string, publishedStatus: Published
 }
 
 export async function deleteContentItem(id: string): Promise<void> {
+  if (!isFirebaseConfigured) {
+    writeLocalContent(readLocalContent().filter((item) => item.id !== id));
+    return;
+  }
+
   const { db } = requireFirebaseServices();
   await deleteDoc(doc(db, CONTENT_COLLECTION, id));
 }
@@ -147,6 +244,35 @@ export async function uploadContentAttachment(params: {
   existing: ContentAttachment[];
   userId: string;
 }): Promise<ContentAttachment[]> {
+  if (!isFirebaseConfigured) {
+    const attachment: ContentAttachment = {
+      id: crypto.randomUUID(),
+      name: params.file.name,
+      type: params.type,
+      url: URL.createObjectURL(params.file),
+      storagePath: `local://${params.contentId}/${attachmentFolder(params.type)}/${sanitizeFileName(params.file.name)}`,
+      contentType: params.file.type,
+      sizeBytes: params.file.size
+    };
+    const nextAttachments = [...params.existing, attachment];
+    const field = attachmentField(params.type);
+
+    writeLocalContent(
+      readLocalContent().map((item) =>
+        item.id === params.contentId
+          ? {
+              ...item,
+              [field]: nextAttachments,
+              updatedBy: params.userId,
+              updatedAt: new Date()
+            }
+          : item
+      )
+    );
+
+    return nextAttachments;
+  }
+
   const { db, storage } = requireFirebaseServices();
   const folder = attachmentFolder(params.type);
   const storagePath = `content/${params.contentId}/${folder}/${Date.now()}-${sanitizeFileName(params.file.name)}`;
@@ -278,4 +404,32 @@ function attachmentField(type: AttachmentType): "audioFiles" | "pdfFiles" | "ima
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-z0-9._-]/gi, "-").toLowerCase();
+}
+
+function readLocalContent(): ContentItem[] {
+  const stored = localStorage.getItem(LOCAL_CONTENT_KEY);
+
+  if (!stored) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as Array<ContentItem & { createdAt?: string; updatedAt?: string }>;
+    return parsed.map((item) => ({
+      ...item,
+      createdAt: item.createdAt ? new Date(item.createdAt) : undefined,
+      updatedAt: item.updatedAt ? new Date(item.updatedAt) : undefined
+    }));
+  } catch {
+    localStorage.removeItem(LOCAL_CONTENT_KEY);
+    return [];
+  }
+}
+
+function writeLocalContent(items: ContentItem[]): void {
+  localStorage.setItem(LOCAL_CONTENT_KEY, JSON.stringify(items));
+}
+
+function sortByServiceOrder(a: ContentItem, b: ContentItem): number {
+  return a.serviceOrder - b.serviceOrder || a.title.localeCompare(b.title);
 }
